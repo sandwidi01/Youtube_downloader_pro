@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Youtube Downloader Pro</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <h1>Téléchargeur de vidéos</h1>
+    <p class="sub">YouTube, TikTok, Facebook, Instagram, X, Vimeo… Collez le lien et c'est tout.</p>
+
+    <form id="form">
+      <input id="url" type="url" placeholder="https://..." required autocomplete="off">
+      <button id="go" type="submit">Analyser</button>
+    </form>
+
+    <p id="error" class="error" hidden></p>
+
+    <section id="result" hidden>
+      <img id="thumb" alt="">
+      <div class="meta">
+        <h2 id="title"></h2>
+        <p id="uploader"></p>
+        <div class="options">
+          <select id="format">
+            <option value="mp4">Vidéo (MP4)</option>
+            <option value="mp3">Audio (MP3)</option>
+          </select>
+          <select id="quality"></select>
+          <button id="dl" type="button">Télécharger</button>
+        </div>
+        <div id="bar" hidden><div id="fill"></div></div>
+        <a id="save" hidden>Enregistrer le fichier</a>
+      </div>
+    </section>
+
+    <footer>Téléchargez uniquement des contenus dont vous détenez les droits ou autorisés par leur auteur.</footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
