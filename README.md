@@ -1,43 +1,107 @@
 # Youtube Downloader Pro
 
-Téléchargeur de vidéos en ligne (YouTube, TikTok, Facebook, Instagram, X, Vimeo…) basé sur yt-dlp + ffmpeg.
-L'utilisateur colle un lien, choisit MP4 ou MP3, et télécharge.
+Application web qui permet de télécharger une vidéo (MP4) ou son audio (MP3) à partir d'un simple lien.
+Elle s'appuie sur **yt-dlp** et **ffmpeg**, derrière une API **FastAPI** et une interface web légère.
+
+> **Projet à but pédagogique.** Il sert à démontrer une architecture web complète (API, tâches en arrière-plan,
+> sécurité, déploiement). Utilisez-le uniquement pour des contenus dont vous détenez les droits ou dont l'auteur
+> autorise le téléchargement, et respectez les conditions d'utilisation des plateformes.
+
+## Fonctionnalités
+
+- Collage d'un lien, aperçu de la vidéo (miniature, titre, auteur) et choix de la qualité disponible
+- Export **MP4** (qualité choisie) ou **MP3** (192 kbps)
+- Téléchargement en tâche de fond avec **barre de progression** en temps réel
+- Sites pris en charge : YouTube, TikTok, Facebook, Instagram, X, Vimeo, Dailymotion, Twitch, Reddit (liste configurable)
+- Journal des téléchargements dans **Firebase Firestore** (optionnel, IP hachée)
+- Déploiement prêt à l'emploi avec **Docker** et **HTTPS automatique** (Caddy)
 
 ## Architecture
 
-- `backend/main.py` : API FastAPI (`/api/info`, `/api/download`, `/api/jobs/{id}`, `/api/file/{id}`)
-- `frontend/` : page web statique servie par le backend
-- Firebase Firestore (optionnel) : collection `downloads` (domaine, format, statut, IP hachée)
-- Docker + Caddy : déploiement avec HTTPS automatique sur votre nom de domaine
+```
+Navigateur ──► Caddy (HTTPS, nom de domaine) ──► FastAPI ──► yt-dlp + ffmpeg
+                                                    │
+                                                    └──► Firebase Firestore (historique, optionnel)
+```
 
-> Firebase Hosting / Cloud Functions ne peuvent pas exécuter ffmpeg + yt-dlp de façon fiable :
-> le backend doit tourner sur un VPS (Hetzner, OVH, DigitalOcean…).
+| Élément | Rôle |
+|---|---|
+| `backend/main.py` | API FastAPI : analyse du lien, création des tâches, suivi, envoi du fichier |
+| `frontend/` | Page HTML/CSS/JS sans framework, servie par le backend |
+| `Dockerfile`, `docker-compose.yml` | Image avec ffmpeg et Node, orchestration avec Caddy |
+| `Caddyfile` | Reverse proxy et certificat HTTPS automatique |
 
-## Lancer en local
+### API
+
+| Méthode | Route | Description |
+|---|---|---|
+| `POST` | `/api/info` | Métadonnées de la vidéo et qualités disponibles |
+| `POST` | `/api/download` | Lance un téléchargement, renvoie un `job_id` |
+| `GET` | `/api/jobs/{id}` | Statut et progression de la tâche |
+| `GET` | `/api/file/{id}` | Récupération du fichier final |
+| `GET` | `/api/health` | Vérification de l'état du service |
+
+## Sécurité et limites
+
+- **Liste blanche de domaines** (`ALLOWED_DOMAINS`) : empêche d'utiliser le serveur comme proxy ouvert
+- Extracteur générique de yt-dlp désactivé
+- **Limitation de débit** par IP (`RATE_LIMIT_PER_MIN`)
+- Durée maximale des vidéos (`MAX_DURATION_SECONDS`) et nettoyage automatique des fichiers (`FILE_TTL_SECONDS`)
+- Aucune adresse IP stockée en clair : seul un hash tronqué est enregistré
+
+## Installation en local
+
+Prérequis : Python 3.11+, ffmpeg, Node.js (requis par yt-dlp pour YouTube).
 
 ```bash
-cd backend
-pip install -r requirements.txt   # ffmpeg doit être installé
+git clone https://github.com/sandwidi01/Youtube_downloader_pro.git
+cd Youtube_downloader_pro/backend
+pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-Ouvrir http://localhost:8000
+Puis ouvrir http://localhost:8000.
 
-## Déployer sur un VPS
+## Déploiement
 
-1. Faire pointer le DNS de votre domaine (enregistrement A) vers l'IP du VPS.
-2. `cp .env.example .env` et renseigner `DOMAIN`.
-3. Firebase : créer un projet, activer Firestore, générer une clé de compte de service
-   et la placer dans `secrets/firebase.json`. Sans ce fichier, l'app fonctionne sans historique.
+L'application doit tourner sur un **serveur (VPS)** : Firebase Hosting et Cloud Functions ne permettent pas
+d'exécuter ffmpeg et yt-dlp de façon fiable. Firebase ne sert ici qu'à la base de données.
+
+1. Faire pointer l'enregistrement DNS (type A) de votre domaine vers l'IP du serveur.
+2. `cp .env.example .env` puis renseigner `DOMAIN`.
+3. *(Optionnel)* Créer un projet Firebase, activer Firestore et placer la clé de compte de service
+   dans `secrets/firebase.json`.
 4. `docker compose up -d --build`
+
+### Configuration
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `DOMAIN` | — | Nom de domaine servi par Caddy |
+| `ALLOWED_DOMAINS` | liste de sites | Sites acceptés |
+| `RATE_LIMIT_PER_MIN` | `6` | Requêtes par minute et par IP |
+| `MAX_DURATION_SECONDS` | `7200` | Durée maximale d'une vidéo |
+| `FILE_TTL_SECONDS` | `3600` | Durée de conservation des fichiers |
+| `FIREBASE_CREDENTIALS` | — | Chemin de la clé Firebase |
 
 ## Maintenance
 
-yt-dlp doit être mis à jour régulièrement (les sites changent souvent) :
-`docker compose build --no-cache app && docker compose up -d`
+Les plateformes changent souvent : mettez yt-dlp à jour régulièrement.
 
-## Sécurité / limites
+```bash
+docker compose build --no-cache app && docker compose up -d
+```
 
-- Seuls les domaines de `ALLOWED_DOMAINS` sont acceptés (évite l'abus du serveur comme proxy).
-- Limitation de débit par IP, durée maximale, suppression des fichiers après `FILE_TTL_SECONDS`.
-- Respectez les conditions d'utilisation des plateformes et le droit d'auteur.
+## Pistes d'évolution
+
+- Comptes utilisateurs (Firebase Auth) et quotas hebdomadaires par compte
+- Limitation de qualité selon l'offre
+- Paiement par mobile money pour une offre premium
+
+## Technologies
+
+Python · FastAPI · yt-dlp · ffmpeg · JavaScript · Firebase Firestore · Docker · Caddy
+
+## Licence
+
+Aucune licence n'est définie pour le moment : tous droits réservés par défaut.
